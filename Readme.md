@@ -18,6 +18,25 @@ The API uses **Semantic Kernel** + **Google Gemini (or OpenAI)** to:
 
 ---
 
+## What is Semantic Kernel?
+
+**Microsoft Semantic Kernel (SK)** is an open-source framework that helps integrate **Large Language Models (LLMs)** like Gemini, GPT-4, or Claude into your .NET applications.
+
+It enables developers to:
+- Create **AI-powered workflows** that mix natural language and code.
+- Use **prompt templates** to transform user input (like a question) into structured output (like SQL).
+- Chain together **functions** (called *skills*) for text generation, data retrieval, or reasoning.
+- Easily switch between AI models (OpenAI, Azure OpenAI, Google Gemini, etc.).
+
+In this project, **Semantic Kernel** acts as the **middleware** between:
+- The **user’s question**, and
+- The **AI model** that generates SQL commands dynamically.
+
+This makes it ideal for *AI-assisted data querying systems* like **SoccerQueryAPI**.
+
+---
+
+
 ## Architecture Overview
 
 ```
@@ -75,6 +94,12 @@ SoccerQueryAPI/
 - [Google Gemini API Key](https://makersuite.google.com/) or OpenAI API Key
 - SQLite database file (`Data/database.sqlite`)
 
+### 🔹 Install Required NuGet Packages
+ - dotnet add package Microsoft.SemanticKernel  
+ - dotnet add package Microsoft.Data.Sqlite 
+ - dotnet add package Microsoft.SemanticKernel.Connectors.OpenAI
+ - dotnet add package Microsoft.SemanticKernel.Connectors.Google --version 1.61.0-alpha
+
 ### 🔹 Dataset Information 
  - Source: European Soccer Database - [Kaggle](https://www.kaggle.com/datasets/hugomathien/soccer )
 
@@ -121,5 +146,36 @@ Edit **`appsettings.json`** to include your credentials and settings:
 
 ### 🔹 Run the API
  - dotnet run
+
+ Then open:
+
+👉 https://localhost:7241/swagger
+
+to test endpoints interactively.
+
+## API Endpoints
+
+ - POST /api/Query/test 
+    - Purpose : Test AI connectivity
+
+ - POST /api/Query/generate-query
+    - Purpose : Generate SQL from a natural language question (no DB execution)
+
+- POST /api/Query/execute-query 
+    - Purpose : Execute a provided SQL query directly against the database
+
+- POST /api/Query/generateAndExecuteQuery 
+    - Purpose : End-to-end process → Generate SQL → Validate → Execute
+
+
+## SQL Validation & Security
+
+To prevent SQL injection or misuse:
+ - Only SELECT statements are allowed.
+ - Only approved tables/columns are accessible (from config).
+ - LIMIT clause automatically added if missing.
+ - No INSERT, UPDATE, or DELETE operations allowed.
+
+Handled by SqlValidator.cs.
 
 
