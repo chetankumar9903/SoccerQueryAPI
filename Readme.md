@@ -5,7 +5,7 @@
 
 ---
 
-## 📘 Overview
+## Overview
 
 **SoccerQueryAPI** allows users to ask natural language questions (NLQs) such as:
 
@@ -52,7 +52,7 @@ SoccerQueryAPI/
 │   └── QueryController.cs       # All API endpoints (generate, execute, combined, test)
 │
 ├── Data/
-    └── database.sqlite          # SQLite database with Soccer dataset
+│    └── database.sqlite          # SQLite database with Soccer dataset
 │   ├── DatabaseHelper.cs        # Executes SQL against SQLite, with timer
 │   └── SqlValidator.cs          # Validates allowed SQL queries
 │
