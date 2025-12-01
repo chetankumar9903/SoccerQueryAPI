@@ -16,13 +16,15 @@ namespace SoccerQueryAPI.Controllers
         private readonly DatabaseHelper _db;
         private readonly SqlValidator _validator;
         private readonly ILogger<QueryController> _logger;
+        private readonly QueryHistoryService _history;
 
-        public QueryController(SemanticKernelService service, DatabaseHelper db, SqlValidator validator, ILogger<QueryController> logger)
+        public QueryController(SemanticKernelService service, DatabaseHelper db, SqlValidator validator, ILogger<QueryController> logger, QueryHistoryService history)
         {
             _service = service;
             _db = db;
             _validator = validator;
             _logger = logger;
+            _history = history;
         }
 
 
@@ -50,6 +52,18 @@ namespace SoccerQueryAPI.Controllers
             try
             {
                 var sql = await _service.GenerateSqlAsync(request.Question, cancellationToken);
+                //store history
+                await _history.AddAsync(new QueryHistoryEntry
+                {
+                    Question = request.Question ?? string.Empty,
+                    GeneratedSql = sql,
+                    ExecutedSql = string.Empty,
+                    ApiExecutionMs = sw.ElapsedMilliseconds,
+                    DatabaseExecutionMs = null,
+                    ResultCount = 0,
+                    Note = "Generated only"
+                });
+
                 sw.Stop();
                 return Ok(new ApiResponse<string> { Data = sql, APIExecutionMs = sw.ElapsedMilliseconds });
             }
@@ -62,21 +76,60 @@ namespace SoccerQueryAPI.Controllers
 
 
         [HttpPost("execute-query")]
-        public async Task<ActionResult<ApiResponse<List<Dictionary<string, object>>>>> Execute([FromBody] ExecuteRequest req, CancellationToken cancellationToken)
+        public async Task<ActionResult<ApiResponse<object>>> Execute([FromBody] ExecuteRequest req, CancellationToken cancellationToken)
         {
             var sw = Stopwatch.StartNew();
+            var sql = req.Sql ?? string.Empty;
             try
             {
-                var sql = req.Sql ?? string.Empty;
-                if (!_validator.IsSelectOnly(sql))
-                    return BadRequest(new ApiResponse<List<Dictionary<string, object>>> { Status = "error", Message = "Only SELECT statements are allowed.", APIExecutionMs = sw.ElapsedMilliseconds });
 
-                if (!_validator.ContainsOnlyAllowedTablesAndColumns(sql, out var reason))
-                    return BadRequest(new ApiResponse<List<Dictionary<string, object>>> { Status = "error", Message = $"SQL validation failed: {reason}", APIExecutionMs = sw.ElapsedMilliseconds });
+                if (string.IsNullOrWhiteSpace(sql))
+                {
+                    return BadRequest(new ApiResponse<object>
+                    {
+                        Status = "error",
+                        Message = "SQL query cannot be empty.",
+                        APIExecutionMs = sw.ElapsedMilliseconds
+                    });
+                }
+
+                if (!req.BypassValidation)
+                {
+                    if (!_validator.IsSelectOnly(sql))
+                        return BadRequest(new ApiResponse<object> { Status = "error", Message = "Only SELECT statements are allowed.", APIExecutionMs = sw.ElapsedMilliseconds });
+
+                    if (!_validator.ContainsOnlyAllowedTablesAndColumns(sql, out var reason))
+                        return BadRequest(new ApiResponse<object> { Status = "error", Message = $"SQL validation failed: {reason}", APIExecutionMs = sw.ElapsedMilliseconds });
+
+                }
+
+                // // for without bypass
+
+                //if (!_validator.IsSelectOnly(sql))
+                //    return BadRequest(new ApiResponse<object> { Status = "error", Message = "Only SELECT statements are allowed.", APIExecutionMs = sw.ElapsedMilliseconds });
+
+                //if (!_validator.ContainsOnlyAllowedTablesAndColumns(sql, out var reason))
+                //    return BadRequest(new ApiResponse<object> { Status = "error", Message = $"SQL validation failed: {reason}", APIExecutionMs = sw.ElapsedMilliseconds });
+
+
+
+
 
                 sql = _validator.EnforceRowLimit(sql);
                 //var data = await _db.ExecuteQueryAsync(sql, cancellationToken);
                 var (data, dbTime) = await _db.ExecuteQueryAsync(sql, cancellationToken);
+
+                //store history
+                await _history.AddAsync(new QueryHistoryEntry
+                {
+                    Question = string.Empty,
+                    GeneratedSql = string.Empty,
+                    ExecutedSql = sql,
+                    ApiExecutionMs = sw.ElapsedMilliseconds,
+                    DatabaseExecutionMs = dbTime,
+                    ResultCount = data?.Count ?? 0,
+                    Note = req.BypassValidation ? "Executed (bypass validation)" : "Executed"
+                });
 
                 sw.Stop();
                 //return Ok(new ApiResponse<List<Dictionary<string, object>>> { Data = data, APIExecutionMs = sw.ElapsedMilliseconds });
@@ -100,6 +153,7 @@ namespace SoccerQueryAPI.Controllers
         }
 
 
+
         [HttpPost("generateAndExecuteQuery")]
         public async Task<ActionResult<ApiResponse<object>>> Combined([FromBody] CombinedRequest req, CancellationToken cancellationToken)
         {
@@ -109,20 +163,34 @@ namespace SoccerQueryAPI.Controllers
                 var sql = await _service.GenerateSqlAsync(req.Question, cancellationToken);
 
                 if (string.IsNullOrWhiteSpace(sql))
-                    return BadRequest(new ApiResponse<object> { Status = "error", Message = "Model returned empty SQL.", APIExecutionMs = sw.ElapsedMilliseconds });
+                    return BadRequest(new ApiResponse<object> { Status = "error", Message = "Model returned empty SQL.", Data = new { sql }, APIExecutionMs = sw.ElapsedMilliseconds });
 
                 if (!req.BypassValidation)
                 {
                     if (!_validator.IsSelectOnly(sql))
-                        return BadRequest(new ApiResponse<object> { Status = "error", Message = "Generated SQL is not a SELECT statement.", APIExecutionMs = sw.ElapsedMilliseconds });
+                        return BadRequest(new ApiResponse<object> { Status = "error", Message = "Generated SQL is not a SELECT statement.", Data = new { sql }, APIExecutionMs = sw.ElapsedMilliseconds });
 
                     if (!_validator.ContainsOnlyAllowedTablesAndColumns(sql, out var reason))
-                        return BadRequest(new ApiResponse<object> { Status = "error", Message = $"SQL validation failed: {reason}", APIExecutionMs = sw.ElapsedMilliseconds });
+                        return BadRequest(new ApiResponse<object> { Status = "error", Message = $"SQL validation failed: {reason}", Data = new { sql }, APIExecutionMs = sw.ElapsedMilliseconds });
                 }
 
                 sql = _validator.EnforceRowLimit(sql);
                 //var data = await _db.ExecuteQueryAsync(sql, cancellationToken);
                 var (data, dbTime) = await _db.ExecuteQueryAsync(sql, cancellationToken);
+
+                //store history
+                await _history.AddAsync(new QueryHistoryEntry
+                {
+                    Question = req.Question ?? string.Empty,
+                    GeneratedSql = sql,            // generated SQL (already enforced row limit)
+                    ExecutedSql = sql,
+                    ApiExecutionMs = sw.ElapsedMilliseconds,
+                    DatabaseExecutionMs = dbTime,
+                    ResultCount = data?.Count ?? 0,
+                    Note = req.BypassValidation ? "Generated+Executed (bypass validation)" : "Generated+Executed"
+                });
+
+
 
                 sw.Stop();
                 var response = new
@@ -144,6 +212,38 @@ namespace SoccerQueryAPI.Controllers
             {
                 _logger.LogError(ex, "Combined generation+execution failed");
                 return StatusCode(500, new ApiResponse<object> { Status = "error", Message = ex.Message, APIExecutionMs = sw.ElapsedMilliseconds });
+            }
+        }
+
+
+
+        [HttpGet("history")]
+        public async Task<ActionResult<ApiResponse<IEnumerable<QueryHistoryEntry>>>> GetHistory()
+        {
+            try
+            {
+                var items = await _history.GetAllAsync();
+                return Ok(new ApiResponse<IEnumerable<QueryHistoryEntry>> { Data = items });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get history");
+                return StatusCode(500, new ApiResponse<IEnumerable<QueryHistoryEntry>> { Status = "error", Message = ex.Message });
+            }
+        }
+
+        [HttpDelete("history")]
+        public async Task<ActionResult<ApiResponse<string>>> ClearHistory()
+        {
+            try
+            {
+                await _history.ClearAsync();
+                return Ok(new ApiResponse<string> { Data = "Cleared" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to clear history");
+                return StatusCode(500, new ApiResponse<string> { Status = "error", Message = ex.Message });
             }
         }
 

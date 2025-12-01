@@ -158,15 +158,103 @@ to test endpoints interactively.
  - POST /api/Query/test 
     - Purpose : Test AI connectivity
 
+ Request Body : 
+  ```
+ {
+  "question": "who are you"
+  }
+  ```
+  Response : 
+  ```
+  {
+  "status": "success",
+  "data": "I am a large language model trained by Google.",
+  "message": null,
+  "apiExecutionMs": 1997,
+  "databaseExecutionMs": 0
+}
+  ```
+
  - POST /api/Query/generate-query
     - Purpose : Generate SQL from a natural language question (no DB execution)
+
+Request Body : 
+  ```
+  {
+  "question": "Which team won the most matches in 2015?"
+}
+  ```
+Response:
+```
+{
+  "status": "success",
+  "data": "SELECT\n  T.team_long_name\nFROM Match AS M\nJOIN Team AS T\n  ON T.team_api_id = M.home_team_api_id\nWHERE\n  STRFTIME('%Y', M.date) = '2015' AND M.home_team_goal > M.away_team_goal\nGROUP BY\n  T.team_long_name\nORDER BY\n  COUNT(T.team_api_id) DESC\nLIMIT 1;",
+  "message": null,
+  "apiExecutionMs": 3783,
+  "databaseExecutionMs": 0
+}
+```
+
 
 - POST /api/Query/execute-query 
     - Purpose : Execute a provided SQL query directly against the database
 
+Request Body : 
+  ```
+{
+  "sql": "SELECT T.team_long_name FROM Match AS M JOIN Team AS T ON T.team_api_id = M.home_team_api_id WHERE STRFTIME('%Y', M.date) = '2015' AND M.home_team_goal > M.away_team_goal GROUP BY T.team_long_name ORDER BY COUNT(T.team_api_id) DESC LIMIT 1",
+  "bypassValidation": false
+}
+
+  ```
+Response:
+```
+{
+  "status": "success",
+  "data": {
+    "results": [
+      {
+        "team_long_name": "Real Madrid CF"
+      }
+    ]
+  },
+  "message": null,
+  "apiExecutionMs": 157,
+  "databaseExecutionMs": 154
+}
+```
+
 - POST /api/Query/generateAndExecuteQuery 
     - Purpose : End-to-end process → Generate SQL → Validate → Execute
 
+Request Body : 
+  ```
+ {
+  "question": "Which team won the most matches in 2015?",
+  "bypassValidation": false
+}
+  ```
+Response:
+```
+{
+  "status": "success",
+  "data": {
+    "question": "Which team won the most matches in 2015?",
+    "generatedSql": "SELECT T.team_long_name FROM (SELECT team_id, COUNT(*) AS wins FROM (SELECT home_team_api_id AS team_id FROM Match WHERE SUBSTR(date, 1, 4) = '2015' AND home_team_goal > away_team_goal UNION ALL SELECT away_team_api_id AS team_id FROM Match WHERE SUBSTR(date, 1, 4) = '2015' AND away_team_goal > home_team_goal) AS all_wins GROUP BY team_id ORDER BY wins DESC LIMIT 1) AS TopWinner JOIN Team AS T ON TopWinner.team_id = T.team_api_id",
+    "results": [
+      {
+        "team_long_name": "Celtic"
+      }
+    ]
+  },
+  "message": null,
+  "apiExecutionMs": 5290,
+  "databaseExecutionMs": 230
+}
+```
+
+- GET /api/Query/history
+- DELETE /api/Query/history
 
 ## SQL Validation & Security
 

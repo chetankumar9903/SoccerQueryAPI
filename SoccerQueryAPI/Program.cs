@@ -13,6 +13,7 @@ namespace SoccerQueryAPI
             builder.Services.AddScoped<SemanticKernelService>();
             builder.Services.AddScoped<DatabaseHelper>();
             builder.Services.AddSingleton<SqlValidator>();
+            builder.Services.AddSingleton<QueryHistoryService>();
 
             // Add services to the container.
             builder.Services.AddControllers();

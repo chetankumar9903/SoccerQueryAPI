@@ -47,7 +47,8 @@ SQL:
                 // Invoke the prompt
                 var r = await _kernel.InvokePromptAsync(_sqlPromptTemplate, args, cancellationToken: cancellationToken);
                 var text = r.GetValue<string>() ?? string.Empty;
-                // Clean markup if model wraps it in ```sql
+
+                _logger.LogInformation("Very first response of AI {RawResponse}  - " + text);
                 return text.Trim().Replace("```sql", "").Replace("```", "").Trim();
             }
             catch (OperationCanceledException)
@@ -64,7 +65,7 @@ SQL:
 
         public async Task<string> TestModelAsync(string simplePrompt = "Say hello", CancellationToken cancellationToken = default)
         {
-            // A simple test function to validate connectivity and prompt responses
+
             var prompt = $"You are a friendly assistant. Respond in one sentence: {simplePrompt}";
             try
             {
