@@ -72,8 +72,8 @@ SoccerQueryAPI/
 │
 ├── Data/
 │    └── database.sqlite          # SQLite database with Soccer dataset
-│   ├── DatabaseHelper.cs        # Executes SQL against SQLite, with timer
-│   └── SqlValidator.cs          # Validates allowed SQL queries
+│    ├── DatabaseHelper.cs        # Executes SQL against SQLite, with timer
+│    └── SqlValidator.cs          # Validates allowed SQL queries
 │
 ├── Models/
 │   └── DTOs.cs                  # API request/response models
